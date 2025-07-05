@@ -15,12 +15,13 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 use ShuvroRoy\FilamentSpatieLaravelBackup\FilamentSpatieLaravelBackup;
 use ShuvroRoy\FilamentSpatieLaravelBackup\FilamentSpatieLaravelBackupPlugin;
-use ShuvroRoy\FilamentSpatieLaravelBackup\Models\BackupDestination;
 use Spatie\Backup\BackupDestination\Backup;
 use Spatie\Backup\BackupDestination\BackupDestination as SpatieBackupDestination;
 
@@ -47,7 +48,34 @@ class BackupDestinationListRecords extends Component implements HasForms, HasTab
     public function table(Table $table): Table
     {
         return $table
-            ->query(BackupDestination::query())
+            ->records(
+                function (?string $sortColumn, ?string $sortDirection, ?string $search) {
+                    $data = [];
+
+                    foreach (FilamentSpatieLaravelBackup::getDisks() as $disk) {
+                        $data = array_merge($data, FilamentSpatieLaravelBackup::getBackupDestinationData($disk));
+                    }
+
+                    return collect($data)
+                        ->when(
+                            filled($sortColumn),
+                            fn (Collection $data): Collection => $data->sortBy(
+                                $sortColumn,
+                                SORT_REGULAR,
+                                $sortDirection === 'desc',
+                            ),
+                        )
+                        ->when(
+                            filled($search),
+                            fn (Collection $data): Collection => $data->filter(
+                                fn (array $record): bool => Str::contains(
+                                    Str::lower($record['path']).Str::lower($record['disk']).Str::lower($record['date']),
+                                    Str::lower($search),
+                                ),
+                            ),
+                        );
+                }
+            )
             ->columns([
                 TextColumn::make('path')
                     ->label(__('filament-spatie-backup::backup.components.backup_destination_list.table.fields.path'))
